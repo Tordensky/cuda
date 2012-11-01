@@ -16,8 +16,8 @@ all: RoadMap Cuda
 RoadMap: RoadMap.c
 	$(CC) $(CFLAGS) RoadMap.c -o RoadMap $(INC) $(LIB)
 
-Cuda: RoadMapCuda.c
-	$(CC) $(CFLAGS) RoadMapCuda.c -o RoadMapCuda $(INC) $(LIB)
+Cuda: RoadMapCuda.cu
+	$(CC) $(CFLAGS) RoadMapCuda.cu -o RoadMapCuda $(INC) $(LIB)
 	
 clean:
 	rm -f RoadMap RoadMapCuda *~

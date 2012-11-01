@@ -1,6 +1,7 @@
 #include "graphicsScreen.h"
 #include "StopWatch.h"
 #include <stdio.h>
+#include <cuda.h>
 
 #define WIDTH 500
 #define HEIGHT 500
@@ -53,7 +54,14 @@ inline int solve(double x, double y)              //Simple Mandelbrot
   
   return itt;
 }
-  
+
+__global__ void cudaSolve(float result[WIDTH][HEIGHT])
+{
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+}
+
+
 void CreateMap() {        //Our 'main' function
   
   int x,y,color;                               //Holds the result of slove
@@ -61,9 +69,11 @@ void CreateMap() {        //Our 'main' function
 
   for(y=0;y<HEIGHT;y++)              //Main loop for map generation
     for(x=0;x<WIDTH;x++){  
-      color=solve(translate_x(x),translate_y(y))*colorcount/100;
+      color = solve(translate_x(x), translate_y(y))*colorcount/100;
+      
 #ifdef GRAPHICS
       gs_plot(x,y,colortable[color]); //Plot the coordinate to map
+
 #else
       crc+=colortable[color];
 #endif
