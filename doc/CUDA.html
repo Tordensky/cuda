@@ -1,0 +1,71 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+
+<html> <head> <title>INF-3201 &ndash; Assignment 3: Race Trap</title>
+<style type="text/css"> .figur {border:none;border-top:solid 0.5pt;
+border-bottom:solid 0.5pt; .5pt;padding:1.0pt 0cm 0cm 0cm} .figur p
+{text-align: center} </style> </head>
+
+<body> <h2>INF-3201 Parallel Programming</h1> <h1>Assignment 3: Dessert
+Map and Race Trap using CUDA</h2>
+
+  <h3>The Assignment</h3>
+
+  <p>Solve the Mandelbrot Set (in Assignment 1) and the Traveling
+  Salesman Problem (in Assignment 2) using <a
+  href="http://developer.nvidia.com/object/gpucomputing.html"> Nvidia
+  CUDA </a>. Algorithms used in this assignment don't need to be the
+  same as those used in Assignments 1 and 2. Use Nvidia CUDA Visual
+  Profiler to analyze your implementations. Compare the performance of
+  your implementations using CUDA with the performance of your previous
+  implementations using MPI (for Mandelbrot Set) and Cilk++  (for
+  Traveling Salesman Problem). </p>
+
+  <p>We also like to benchmark your solutions a bit against each other
+  to learn about how your particular choices perform: we will give you
+  suitable problem parameters during the course of the assignment so you
+  can test your implementations with these specific configurations.</p>
+
+  <p>A report should be made that describes the various choices that
+  have been made, as well as individual techniques that have been
+  applied to improve performance. The performance impact of each the
+  applied techniques should be documented. In addition, the scalability
+  of your implementation and the achieved performance should be
+  discussed.</p>
+
+  <h3>Optimization</h3>
+
+  <p>Any optimization may be applied, but the result should be correct
+  (i.e. give a reasonable answer) and independent of the number of
+  nodes/cores that are used to achieve the solution. Any optimization
+  that is applied must be thoroughly described.</p>
+
+  <h4>Hand-in</h4>
+
+	<p>You must follow the instructions given in the first group session
+	(slides available on fronter), just like in the previous two
+	assignments. If the requirements given there are not met, the
+	hand-in will <i>not</i> be accepted.</p>
+
+    <p>The deadline is Thursday, November 15th, 23:59.</p>
+
+  <h3>Links</h3>
+
+  <ul> <li><a
+  href="http://developer.download.nvidia.com/compute/cuda/3_0/toolkit/
+  docs/NVIDIA_CUDA_ProgrammingGuide.pdf"> CUDA Programming Guide
+  3.0.</a></li> <li><a
+  	href="http://developer.download.nvidia.com/compute/cuda/3_0/
+  toolkit/docs/NVIDIA_CUDA_BestPracticesGuide.pdf"> CUDA C Best Best
+  Practices Guide</a></li> <li><a
+  	href="http://developer.download.nvidia.com/compute/cuda/3_0/
+  toolkit/docs/CudaReferenceManual.pdf"> CUDA Reference Manual </a></li>
+  <li><a
+  	href="http://developer.download.nvidia.com/compute/cuda/3_0/
+  toolkit/docs/CUDA_GDB_v3-0.pdf"> CUDA-GDB User Manual </a></li> <li><a
+  	href="http://developer.download.nvidia.com/compute/cuda/3_0/
+  toolkit/docs/visual_profiler_cuda/cudaprof.html"> CUDA Visual Profiler
+  User Guide </a></li>
+
+	</ul>
+
+ <hr> <p>Phuong Ha, Lars Tiede.</p> </body> </html>
