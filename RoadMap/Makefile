@@ -11,10 +11,13 @@ LIBSDL = -L/usr/X11R6/lib64
 INC = $(INCSDL) -I$(RRDIR) 
 LIB = $(LIBSDL) -L$(RRDIR) -lX11 -lgraphicsScreen -lSDL -lStopWatch -lpthread -lm
 
-all: RoadMap
+all: RoadMap Cuda
 
 RoadMap: RoadMap.c
 	$(CC) $(CFLAGS) RoadMap.c -o RoadMap $(INC) $(LIB)
 
+Cuda: RoadMapCuda.c
+	$(CC) $(CFLAGS) RoadMapCuda.c -o RoadMapCuda $(INC) $(LIB)
+	
 clean:
-	rm -f RoadMap *~
+	rm -f RoadMap RoadMapCuda *~
