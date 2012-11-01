@@ -161,3 +161,10 @@ pip-log.txt
 
 # Mac crap
 .DS_Store
+
+
+# compiled files
+*.o
+*.a
+*~
+RoadMap/RoadMap
