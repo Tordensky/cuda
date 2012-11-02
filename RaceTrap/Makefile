@@ -1,18 +1,24 @@
-CC = /opt/cuda/bin/nvcc
-
+CC = /opt/cuda/bin/nvcc 
 # Remove -DGRAPHICS to compile with no graphic support (e.g. for measurements)
-CFLAGS = -O2 -DGRAPHICS
+CFLAGS = -O2  -DGRAPHICS
+RRDIR = ../lib
 
-# Use this for SDL
-RRLIB = ../lib
-INC = -I$(RRLIB) `sdl-config --cflags`
-LIB = -L$(RRLIB) -L/usr/X11R6/lib64 -L/usr/X11R6/lib -lX11 -lgraphicsScreen -lStopWatch  `sdl-config --libs`
+# Adapt this to your distribution if necessary
+INCSDL =
+LIBSDL = -L/usr/X11R6/lib64 
 
-all: RaceTrap
+
+INC = $(INCSDL) -I$(RRDIR) 
+LIB = $(LIBSDL) -L$(RRDIR) -lX11 -lgraphicsScreen -lSDL -lStopWatch -lpthread -lm
+
+all: RaceTrap Cuda
 
 RaceTrap: RaceTrap.c
 	$(CC) $(CFLAGS) RaceTrap.c -o RaceTrap $(INC) $(LIB)
 
+Cuda: RaceTrapCuda.cu
+	$(CC) $(CFLAGS) RaceTrapCuda.cu -o RaceTrapCuda $(INC) $(LIB)
+	
 clean:
-	rm -f *~ *.o core* RaceTrap
+	rm -f RaceTrap RaceTrapCuda *~
 
