@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <cuda.h>
 
-#define WIDTH 5000
-#define HEIGHT 5000
+#define WIDTH 512
+#define HEIGHT 512
 #define SIZE WIDTH*HEIGHT
 
 int zooms=10;
@@ -59,54 +59,59 @@ __global__ void cudaSolve(int *res, int width, int height, float x_min, float x_
 {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     
-    if (i <= (width*height)){
+    int n = (width*height);
+    
+    if (i < n){
       int x, y;
     
       // Calculate x and y from i
-      x = i % width;
-      y = i / width;
+      x = int(i % WIDTH);
+      y = int(i / WIDTH);
                   
-      res[i] = solve((((x_max-x_min)/WIDTH)*x)+x_min, (((y_max-y_min)/HEIGHT)*y)+y_min)*10/100; 
+      res[i] = solve((((x_max-x_min)/WIDTH)*x)+x_min, (((y_max-y_min)/HEIGHT)*y)+y_min) * 10 / 100; 
     }
+    
+    __syncthreads();
 }
 
 
 void CreateMap() {        //Our 'main' function
     
-  int x, y, size;                               //Holds the result of slove
+  int x, y, bytesize;                               //Holds the result of slove
   
-  size = SIZE * sizeof(int);
+  bytesize = SIZE * sizeof(int);
   // Allocate space for result on host
+  printf("size is: %d, bytesize: %d\n", SIZE, bytesize);
+  
   int *result;
-  result = (int*)malloc(sizeof(int)*SIZE);
+  result = (int*)malloc(bytesize);
   
   // Allocate space for result on device
   int *devResult;
-  cudaMalloc((void**)&devResult, size);
+  cudaMalloc((void**)&devResult, bytesize);
 
   // Calculate space and number of blocks
   int threadsPerBlock = 512;
   int blocksPerGrid = (SIZE + threadsPerBlock - 1) / threadsPerBlock;
   
-  //printf("Thread Per block: %d, blocksPerGrid: %d\n", threadsPerBlock, blocksPerGrid);
+  printf("Thread Per block: %d, blocksPerGrid: %d\n", threadsPerBlock, blocksPerGrid);
   
   // Solve on Cuda device
   cudaSolve<<<threadsPerBlock, blocksPerGrid>>>(devResult, WIDTH, HEIGHT, box_x_min, box_x_max, box_y_min, box_y_max);
   
   // Copy result back to host
-  cudaMemcpy(result, devResult, size, cudaMemcpyDeviceToHost);
-  
-  cudaFree(devResult);
-  
-  printf("Kommer hit før segfault\n");
+  cudaMemcpy((void*)result, (void*)devResult, bytesize, cudaMemcpyDeviceToHost);
   
   for (int i = 0; i < SIZE; i++){
-    x = i % WIDTH;
-    y = i / WIDTH;
+    x = int(i % WIDTH);
+    y = int(i / WIDTH);
     
-    if (y > HEIGHT){
-      printf ("ERROR");
-    }
+    if (x < 0 || x > WIDTH)
+        printf("Error X: %d", x);
+        
+    if (y < 0 || y > HEIGHT)
+        printf("Error Y: %d", y);
+            
     
 #ifdef GRAPHICS
     gs_plot(x,y,colortable[result[i]]); //Plot the coordinate to map
@@ -117,8 +122,10 @@ void CreateMap() {        //Our 'main' function
 #ifdef GRAPHICS
   gs_update();
 #endif
-    
   
+  cudaFree(devResult);
+  
+  free(result); // TODO allocate and free before all and after all
   
   //result[0] = 123;
 //   printf("New round\n");
@@ -140,9 +147,6 @@ void CreateMap() {        //Our 'main' function
 // #ifdef GRAPHICS
 //   gs_update();
 // #endif
-  
-  
-  free(result); // TODO allocate and free before all and after all
 }
 
 
@@ -150,7 +154,7 @@ int
 RoadMap ()
 {
   int i;
-  float deltaxmin, deltaymin, deltaxmax,deltaymax;
+  double deltaxmin, deltaymin, deltaxmax,deltaymax;
 
   box_x_min=-1.5; box_x_max=0.5;           //Set the map bounding box for total map
     box_y_min=-1.0; box_y_max=1.0;
