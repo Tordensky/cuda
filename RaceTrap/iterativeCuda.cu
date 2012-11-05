@@ -81,6 +81,15 @@ void PlotRoute(char *path)
 #endif
 
 
+int nodesAtLevel(int level)
+{
+	int result = 1;
+	for (int i = 1; i <= level; i++){
+		result = result * (nTotalCities - i);
+	}
+	return result;
+}
+
 /* 
  * A recursive Traveling Salesman Solver using branch-and-bound. 
  * 
@@ -104,70 +113,96 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
     bestRoute = Alloc_RouteDefinition(); 
 
     bestRoute->length = maxRouteLen;
+    
+    int nodesAtThisLevel = nodesAtLevel(2); 
+    //(nTotalCities - 1) * (nTotalCities - 2);
+	printf("Nodes at this level: %d \n", nodesAtThisLevel);
+	
+	//stack_t* stck;
+    //stck = stack_create();
+    
+//    push(stck, (void*)&"a");
+//    push(stck, (void*)&"b");
+//    push(stck, (void*)&"c");
+//    push(stck, (void*)&"d");
+//    
+//    while(stck->size > 0)
+//    {
+//    	printf("Stack elem %s\n", pop(stck));
+//    	
+//    }
+//	
+//	
+//    
+//    // allocate an array of all routes at level one
+//    RouteDefinition *routes = (RouteDefinition*)malloc(sizeof(RouteDefinition) * nodesAtThisLevel);
+//    
+//        // Generate an array holding all routes at level two
 
-    for(int p = route->nCitiesVisited; p < nTotalCities; p++){
-        
-        stack_t* stck;
-        stck = stack_create();
-        
+//	for(int p = route->nVisited; p < nTotalCities; p++){
+//		// Calculate route length
+//		double newLength = route->length + distanceTable[route->path[route->nCitiesVisited-1]][route->path[p]];  	
+//	
+//		// Copy current route to new route
+//		memcpy(routes[p-1].path, route->path, nTotalCities);			
+//		
+//	    // Swaps the position of bag # 'i' and bag # 'nCitiesVisited' from route
+//	    routes[p-1].path[route->nCitiesVisited] = route->path[p];
+//	    routes[p-1].path[p]              = route->path[route->nCitiesVisited]; 
+//	    routes[p-1].nCitiesVisited = route->nCitiesVisited + 1;
+//	    routes[p-1].length  = newLength;
+//	    
+//	    
+//	    // Print current calculatet paths
+//	    printf("Route: %d - path: ", (p-1));
+//	    for (int c = 0; c < nTotalCities; c++){
+//	    	printf("%d", routes[p-1].path[c]);
+//	    }
+//	    printf("\n");
+//    }
+    
+	// LEVEL 3 in three structure
+
+	stack_t* stck;
+    stck = stack_create();
+
+	// This is the CUDA part of the assignment 
+//    for(int p = route->nCitiesVisited; p < nTotalCities; p++){
+//        
+//        
+//        
         RouteDefinition *newRoute;
-        newRoute = Alloc_RouteDefinition();  
-        
-        double newLength = route->length + distanceTable[route->path[route->nCitiesVisited-1]][route->path[p]];
-        
-        memcpy(newRoute->path, route->path, nTotalCities);   // Copy current route from route
-            
-        // Swaps the position of bag # 'i' and bag # 'nCitiesVisited' from route
-        newRoute->path[route->nCitiesVisited] = route->path[p];
-        newRoute->path[p]              = route->path[route->nCitiesVisited]; 
-        newRoute->nCitiesVisited = route->nCitiesVisited + 1;
-        newRoute->length  = newLength;
-        
-        push(stck, newRoute);
+//        newRoute = Alloc_RouteDefinition();  
+//        
+        double newLength;// = route->length + distanceTable[route->path[route->nCitiesVisited-1]][route->path[p]];
+//        
+//        memcpy(newRoute->path, route->path, nTotalCities);   // Copy current route from route
+//            
+//        // Swaps the position of bag # 'i' and bag # 'nCitiesVisited' from route
+//        newRoute->path[route->nCitiesVisited] = route->path[p];
+//        newRoute->path[p]              = route->path[route->nCitiesVisited]; 
+//        newRoute->nCitiesVisited = route->nCitiesVisited + 1;
+//        newRoute->length  = newLength;
+//        
+        push(stck, route);
 
         RouteDefinition *curr_route;
         curr_route = Alloc_RouteDefinition();
         
         while(stck->size > 0){
-            curr_route = (RouteDefinition *)pop(stck);
+            curr_route = (RouteDefinition *)pop_back(stck);
             
             // Has visited all cities
             
-            if (curr_route->nCitiesVisited == nTotalCities){
-                
-                curr_route->length += distanceTable[curr_route->path[curr_route->nCitiesVisited-1]][curr_route->path[0]];
-
-                pthread_mutex_lock(&mut);
-
-                if(curr_route->length < globalBest){
-
-                    free(bestRoute);
-                    
-                    bestRoute = curr_route;
-
-                    globalBest = bestRoute->length;
-                    
-    #ifdef GRAPHICS
-                    PlotRoute((char *)bestRoute->path);
-    #endif  
-                    
-                } else {
-                    free(curr_route);
-                }
-                pthread_mutex_unlock(&mut);
-                
-            // Has not visited all nodes
+            if (curr_route->nCitiesVisited == 3){
+                break;
+ 				
                         
             } else {
                 for (int i = curr_route->nCitiesVisited; i < nTotalCities; i++){
                     
                     newLength = curr_route->length + distanceTable[curr_route->path[curr_route->nCitiesVisited-1]][curr_route->path[i]];
-                    
-                    // Should this city be added
-                    if (newLength >= globalBest){     
-                        continue;
-                    }
-                                    
+                                                        
                     newRoute = Alloc_RouteDefinition();  
                     
                     memcpy(newRoute->path, curr_route->path, nTotalCities);   // Copy current route from route
@@ -178,13 +213,27 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
                     newRoute->nCitiesVisited = curr_route->nCitiesVisited + 1;
                     newRoute->length  = newLength;
                     
+            	    // Print current calculatet paths
+				    printf("Route: %d, visited: %d - path: ", i, newRoute->nCitiesVisited);
+				    for (int c = 0; c < nTotalCities; c++){
+				    	printf("%d", newRoute->path[c]);
+				    }
+				    printf(" length: %f, \n", newRoute->length);
+            
                     push(stck, newRoute);
+                    
+                    // Has created nodes for CUDA
+                    if (curr_route->nCitiesVisited == 3){
+                    	// TODO should spawn cuda threads at this level
+                    	printf("BREAKS\n");
+                    	break;
+                    }
                     
                 }
                 free(curr_route);
             }   
         }   
-    }
+   // }
     
     free(route);
     
@@ -265,7 +314,8 @@ int main (int argc, char **argv)
     sw_init();
     sw_start();
         // Find the best route
-    res = ShortestRoute(originalRoute);  
+    res = ShortestRoute(originalRoute);
+    
     sw_stop();
     sw_timeString(buf);
     
@@ -274,8 +324,10 @@ int main (int argc, char **argv)
 #ifdef GRAPHICS
         // Show the best route
     PlotRoute((char *)res->path);
+    
     free(res);
     sleep(2);
+    printf("kommer hit for segfault\n");  
     gs_exit();
 #endif  
     

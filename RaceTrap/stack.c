@@ -16,6 +16,7 @@ typedef struct stacknode stacknode_t;
 
 struct stacknode {
     stacknode_t *next;
+    stacknode_t *prev;
     void *item;
 };
 
@@ -38,6 +39,7 @@ static stacknode_t *newnode(void *item)
     if (node == NULL)
 	    fatal_error();
     node->next = NULL;
+    node->prev = NULL;
     node->item = item;
     return node;
 }
@@ -82,12 +84,31 @@ void push(stack_t *stack, void *item)
     }
     else {
 	    node->next = stack->head;
+	    stack->head->prev = node;
 	    stack->head = node;
     }
     stack->size++;
 
 }
 
+void *pop_back(stack_t * stack)
+{
+	if (stack->head == NULL){
+		return NULL;
+	} else {
+		void *item = stack->tail->item;
+		stacknode_t *tmp = stack->tail;
+		stack->tail = tmp->prev;
+		
+		if (stack->tail == NULL){
+			stack->head = NULL;
+		}
+		
+		free(tmp);
+		stack->size--;
+		return item;
+	}
+}
 
 /*
  * Pop from the top of the stack
@@ -101,9 +122,12 @@ void *pop(stack_t *stack)
         void *item = stack->head->item;
 	    stacknode_t *tmp = stack->head;
 	    stack->head = stack->head->next;
+	    stack->head->prev = NULL;
+	    
 	    if (stack->head == NULL) {
 	        stack->tail = NULL;
 	    }
+	    
 	    free(tmp);
 		stack->size--;
 	    return item;
