@@ -35,7 +35,7 @@ typedef struct {
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 RouteDefinition *bestRoute;
 
-int      nTotalCities = 0;             // Number of grain-bags
+int      nTotalCities = 0;             // Number of grain-bagsg
 Coord   *cityCoords;             // Coordinates for the grain-bags
 double **distanceTable;         // Table of distances between any two grain-bags
 double   maxRouteLen = 10E100;  // Initial best distance, must be longer than any possible route
@@ -131,6 +131,8 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
         while(stck->size > 0){
             curr_route = (RouteDefinition *)pop(stck);
             
+            // Has visited all cities
+            
             if (curr_route->nCitiesVisited == nTotalCities){
                 
                 curr_route->length += distanceTable[curr_route->path[curr_route->nCitiesVisited-1]][curr_route->path[0]];
@@ -154,6 +156,7 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
                 }
                 pthread_mutex_unlock(&mut);
                 
+            // Has not visited all nodes
                         
             } else {
                 for (int i = curr_route->nCitiesVisited; i < nTotalCities; i++){
@@ -179,10 +182,8 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
                     
                 }
                 free(curr_route);
-            }
-            
-        }
-        
+            }   
+        }   
     }
     
     free(route);
