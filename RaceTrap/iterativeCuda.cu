@@ -11,7 +11,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <cilk.h>
 #include <unistd.h>
 #include <math.h>
 #include "graphicsScreen.h"
@@ -237,7 +236,7 @@ static void ReadRoute()
 }
 
 
-int cilk_main (int argc, char **argv) 
+int main (int argc, char **argv) 
 {
     RouteDefinition *originalRoute, *res;
     int i;

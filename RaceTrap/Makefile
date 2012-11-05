@@ -17,7 +17,7 @@ RaceTrap: RaceTrap.c
 	$(CC) $(CFLAGS) RaceTrap.c -o RaceTrap $(INC) $(LIB)
 
 Cuda: RaceTrapCuda.cu
-	$(CC) $(CFLAGS) RaceTrapCuda.cu -o RaceTrapCuda $(INC) $(LIB)
+	$(CC) $(CFLAGS) iterativeCuda.cu -o RaceTrapCuda $(INC) $(LIB)
 	
 clean:
 	rm -f RaceTrap RaceTrapCuda *~
