@@ -41,6 +41,8 @@ double **distanceTable;         // Table of distances between any two grain-bags
 double   maxRouteLen = 10E100;  // Initial best distance, must be longer than any possible route
 double   globalBest  = 10E100;  // Bounding variable
 
+int fanOutLevel = 3;
+
 
 inline RouteDefinition* Alloc_RouteDefinition()
 {
@@ -83,6 +85,7 @@ void PlotRoute(char *path)
 
 int nodesAtLevel(int level)
 {
+  level = level - 1;
   int result = 1;
   for (int i = 1; i <= level; i++){
     result = result * (nTotalCities - i);
@@ -102,13 +105,11 @@ char* stackToArray(stack_t *stck)
     padding = 4 - rest;
   }
   
-  int arraySize = (elemSize+padding) * nodesAtLevel(2);
+  int arraySize = (elemSize+padding) * nodesAtLevel(fanOutLevel);
   
   printf("Struct size is: %d, rest: %d, padding: %d, array: %d\n", elemSize, rest, padding, arraySize);
 
-  char *tmp_route;
-  
-  char *array, *iter;
+  char *tmp_route, *array, *iter;
   
   array = (char*)malloc(sizeof(unsigned char) * arraySize);
     
@@ -121,15 +122,7 @@ char* stackToArray(stack_t *stck)
     tmp_route = (char*)pop_back(stck);
     
     memcpy(iter, tmp_route, elemSize);
-    
-    route = (RouteDefinition*)iter;
-    
-//     printf("before move: %d\n", route->nCitiesVisited);
-//     for (int c = 0; c < nTotalCities; c++){
-//        printf("%d", route->path[c]);
-//     }
-//     printf("\n");
-    
+        
     iter += (elemSize + padding);
     
     free(tmp_route);
@@ -137,31 +130,6 @@ char* stackToArray(stack_t *stck)
   
   return array;
 
-/*    
-  //RouteDefinition *route;
-  
-  iter = array;
-  
-  for(int i = 0; i < arraySize; i += (elemSize+padding)){
-    
-    
-    route = (RouteDefinition*)iter; 
-    iter += (elemSize + padding);
-    
-    printf("i: %d, %d - ", i, route->nCitiesVisited);
-    for (int c = 0; c < nTotalCities; c++){
-       printf("%d", route->path[c]);
-    }
-    printf("\n");
-  } 
-  
-  
-  
-  
-  free(array);
-  //return array;*/
-  
-  
 }
 
 /* 
@@ -188,7 +156,7 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
   
   bestRoute->length = 1.0;//maxRouteLen;
   
-  int nodesAtThisLevel = nodesAtLevel(2); 
+  int nodesAtThisLevel = nodesAtLevel(fanOutLevel); 
   //(nTotalCities - 1) * (nTotalCities - 2);
   printf("Nodes at this level: %d \n", nodesAtThisLevel);
   
@@ -268,29 +236,15 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	  
 	  // Has visited all cities
 	  
-	  if (curr_route->nCitiesVisited == 3){
+	  if (curr_route->nCitiesVisited == fanOutLevel){
 	    
+	    // Push current popped node to stack
 	    push(stck, curr_route);
-	    // NOTE stack now holds all the corrects elements at this level
-	    // TODO copy to cuda device and spawn threads to do the magic shit
 	    
-	    
+	    // convert stack to array
 	    char *array = stackToArray(stck);
-	    
-	    
-// 	    printf("On stack in break\n");
-// 	    int x = 1;
-// 	    while(stck->size > 0){                
-// 	      // Has created nodes for CUDA
-// 	      curr_route = (RouteDefinition *)pop_back(stck);
-// 	      // Print current calculatet paths
-// 	      printf("Route: %d, visited: %d - path: ", x, curr_route->nCitiesVisited);
-// 	      for (int c = 0; c < nTotalCities; c++){
-// 		printf("%d", curr_route->path[c]);
-// 	      }
-// 	      printf(" length: %f, \n", curr_route->length);
-// 	      x++;
-// 	    }
+	    free(stck);
+
 	    break;          
 	  } 
 	  
@@ -308,26 +262,12 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	      newRoute->path[i]              = curr_route->path[curr_route->nCitiesVisited]; 
 	      newRoute->nCitiesVisited = curr_route->nCitiesVisited + 1;
 	      newRoute->length  = newLength;
-	      
-	      // Print current calculatet paths
-// 	      printf("Route: %d, visited: %d - path: ", i, newRoute->nCitiesVisited);
-// 	      for (int c = 0; c < nTotalCities; c++){
-// 		printf("%d", newRoute->path[c]);
-// 	      }
-// 	      printf(" length: %f, \n", newRoute->length);
-	      
+	      	      
 	      push(stck, newRoute);
 	      
-	      // Has created nodes for CUDA
-	      if (curr_route->nCitiesVisited == 3){
-		// TODO should spawn cuda threads at this level
-		printf("BREAKS\n");
-		//break;
-	      } 
 	    }   
 	  } 
 	}   
-	// }
 	
 	free(route);
 	
