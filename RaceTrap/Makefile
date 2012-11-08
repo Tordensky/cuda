@@ -1,11 +1,11 @@
 CC = /opt/cuda/bin/nvcc 
 # Remove -DGRAPHICS to compile with no graphic support (e.g. for measurements)
-CFLAGS = -O2  
-#-DGRAPHICS
+CFLAGS = -arch=sm_20
+#-DGRAPHICS -O2
 RRDIR = ../lib
 
 # Adapt this to your distribution if necessary
-INCSDL =
+INCSDL = 
 LIBSDL = -L/usr/X11R6/lib64 
 
 
@@ -17,7 +17,7 @@ all: RaceTrap Cuda
 RaceTrap: RaceTrap.c
 	$(CC) $(CFLAGS) RaceTrap.c -o RaceTrap $(INC) $(LIB)
 
-Cuda: RaceTrapCuda.cu
+Cuda: iterativeCuda.cu
 	$(CC) $(CFLAGS) iterativeCuda.cu -o RaceTrapCuda $(INC) $(LIB)
 	
 clean:

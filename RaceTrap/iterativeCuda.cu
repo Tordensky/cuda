@@ -17,6 +17,7 @@
 #include "StopWatch.h"
 #include "stack.c"
 #include <pthread.h>
+#include <cuda.h>
 
 
 typedef struct {
@@ -41,7 +42,9 @@ double **distanceTable;         // Table of distances between any two grain-bags
 double   maxRouteLen = 10E100;  // Initial best distance, must be longer than any possible route
 double   globalBest  = 10E100;  // Bounding variable
 
-int fanOutLevel = 3;
+int fanOutLevel = 2;
+int elemSize = 0;
+int arraySize = 0;
 
 
 inline RouteDefinition* Alloc_RouteDefinition()
@@ -97,7 +100,7 @@ char* stackToArray(stack_t *stck)
 {
   printf("Entering Flatten Stack\n");
   
-  int elemSize = sizeof(RouteDefinition) + nTotalCities * sizeof(unsigned char);
+  elemSize = sizeof(RouteDefinition) + nTotalCities * sizeof(unsigned char);
   int rest = elemSize % 4;
   int padding = 0; 
   
@@ -105,7 +108,7 @@ char* stackToArray(stack_t *stck)
     padding = 4 - rest;
   }
   
-  int arraySize = (elemSize+padding) * nodesAtLevel(fanOutLevel);
+  arraySize = (elemSize+padding) * nodesAtLevel(fanOutLevel);
   
   printf("Struct size is: %d, rest: %d, padding: %d, array: %d\n", elemSize, rest, padding, arraySize);
 
@@ -121,6 +124,9 @@ char* stackToArray(stack_t *stck)
     
     tmp_route = (char*)pop_back(stck);
     
+    route = (RouteDefinition*)tmp_route;
+    printf("Len before copy: %f\n", route->length);
+    
     memcpy(iter, tmp_route, elemSize);
         
     iter += (elemSize + padding);
@@ -128,8 +134,40 @@ char* stackToArray(stack_t *stck)
     free(tmp_route);
   }
   
+  elemSize = elemSize + padding;
+  
   return array;
 
+}
+
+__global__ void cudaSolve(char* array, int numRoutes, int routeSize, int numCities)
+{
+  //printf("Hello\n");
+  
+  int i = blockDim.x * blockIdx.x + threadIdx.x;
+  
+  
+  if (i < numRoutes){
+    // Move pointer to correct Route
+    array = array + (i * routeSize);
+    
+    RouteDefinition *route = (RouteDefinition*)array;
+    
+    printf("Route: %d, len: %f - routeSize: %d nCiT: %d nR: %d\n", i, route->length, routeSize, numCities, numRoutes);
+    /*
+    printf("t:%s\n", route->path);
+    for (int c = 0; c < numCities; c++){
+      printf("id:%d, n:%d c:%d\n", i, c, route->path[c]);
+    }*/
+    
+    // TODO Do Some magic
+
+    
+    // Copy result back to position
+    memcpy(array, route, routeSize);
+    
+    //printf("\n");
+  }
 }
 
 /* 
@@ -163,19 +201,7 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
   //stack_t* stck;
   //stck = stack_create();
   
-  //    push(stck, (void*)&"a");
-  //    push(stck, (void*)&"b");
-  //    push(stck, (void*)&"c");
-  //    push(stck, (void*)&"d");
-  //    
-  //    while(stck->size > 0)
-  //    {
-    //    	printf("Stack elem %s\n", pop(stck));
-    //    	
-    //    }
-    //	
-    //	
-    //    
+   
     //    // allocate an array of all routes at level one
     //    RouteDefinition *routes = (RouteDefinition*)malloc(sizeof(RouteDefinition) * nodesAtThisLevel);
     //    
@@ -244,7 +270,25 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	    // convert stack to array
 	    char *array = stackToArray(stck);
 	    free(stck);
-
+	    
+	    char *devArray;
+	    
+	    cudaMalloc((void**)&devArray, arraySize);
+	    
+	    cudaMemcpy(devArray, array, arraySize, cudaMemcpyHostToDevice);
+	    
+	    
+	    int threadsPerBlock = 512;
+	    int blocksPerGrid = (nodesAtThisLevel + threadsPerBlock - 1) / threadsPerBlock;
+	    
+	    printf("Thread Per block: %d, blocksPerGrid: %d, nTotalCities: %d\n", threadsPerBlock, blocksPerGrid, nTotalCities);
+	    
+	    cudaSolve<<<blocksPerGrid, threadsPerBlock>>>(devArray, nodesAtThisLevel, elemSize, nTotalCities);
+	    
+	    cudaMemcpy(array, devArray, arraySize, cudaMemcpyDeviceToHost);
+	    
+	    cudaFree(devArray);
+	    
 	    break;          
 	  } 
 	  
@@ -272,98 +316,98 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	free(route);
 	
 	return bestRoute;
-	}
+}
 	
 	// In the desert, the shortest route is a straight line :)
-	double EuclidDist(Coord *from, Coord *to)
-	{ 
-	  double dx = fabs(from->x - to->x);
-	  double dy = fabs(from->y - to->y);
-	  return sqrt(dx*dx + dy*dy);
-	}
+double EuclidDist(Coord *from, Coord *to)
+  { 
+    double dx = fabs(from->x - to->x);
+    double dy = fabs(from->y - to->y);
+    return sqrt(dx*dx + dy*dy);
+  }
 	
 	// Reads coordinates from a file and generates a distance-table
-	static void ReadRoute()
-	{ 
-	  FILE *file = fopen("./route.dat", "r");
-	  int i,j;
-	  
-	  // Read how many bags there are
-	  if (fscanf(file, "%d", &nTotalCities) != 1) 
-	  {
-	    printf("Error: couldn't read number of bags from route definition file.\n");
-	    exit(-1);
-	  }
-	  
-	  // Allocate array of bag coords. 
-	  cityCoords = (Coord*) malloc(nTotalCities * sizeof(Coord)); 
-	  
-	  // Read the coordinates of each grain bag
-	  for (i = 0; i < nTotalCities; i++)
-	  {
-	    if (fscanf(file,"%d %d", &cityCoords[i].x, &cityCoords[i].y) != 2) 
-	    {
-	      printf("Error: missing or invalid definition of coordinate %d.\n", i);
-	      exit(-1);
-	    }
-	  }
-	  
-	  // Allocate distance table 
-	  distanceTable = (double**) malloc(nTotalCities * sizeof(double*));
-	  for (i = 0; i < nTotalCities; i++)
-	    distanceTable[i] = (double*) malloc(nTotalCities * sizeof(double));
-	  
-	  // Compute the distances between each of the grain bags.
-	    for (i = 0; i < nTotalCities; i++)	  
-	      for (j = 0; j < nTotalCities; j++)	  
-		distanceTable[i][j] = EuclidDist(&cityCoords[i], &cityCoords[j]);
-	}
+static void ReadRoute()
+  { 
+    FILE *file = fopen("./route.dat", "r");
+    int i,j;
+    
+    // Read how many bags there are
+    if (fscanf(file, "%d", &nTotalCities) != 1) 
+    {
+      printf("Error: couldn't read number of bags from route definition file.\n");
+      exit(-1);
+    }
+    
+    // Allocate array of bag coords. 
+    cityCoords = (Coord*) malloc(nTotalCities * sizeof(Coord)); 
+    
+    // Read the coordinates of each grain bag
+    for (i = 0; i < nTotalCities; i++)
+    {
+      if (fscanf(file,"%d %d", &cityCoords[i].x, &cityCoords[i].y) != 2) 
+      {
+	printf("Error: missing or invalid definition of coordinate %d.\n", i);
+	exit(-1);
+      }
+    }
+    
+    // Allocate distance table 
+    distanceTable = (double**) malloc(nTotalCities * sizeof(double*));
+    for (i = 0; i < nTotalCities; i++)
+      distanceTable[i] = (double*) malloc(nTotalCities * sizeof(double));
+    
+    // Compute the distances between each of the grain bags.
+      for (i = 0; i < nTotalCities; i++)	  
+	for (j = 0; j < nTotalCities; j++)	  
+	  distanceTable[i][j] = EuclidDist(&cityCoords[i], &cityCoords[j]);
+  }
 	
 	
-	int main (int argc, char **argv) 
-	{
-	  RouteDefinition *originalRoute, *res;
-	  int i;
-	  char buf[256];
-	  
-	  ReadRoute();
-	  
-	  #ifdef GRAPHICS
-	  gs_init(501,501);
-	  #endif
-	  
-	  // Set up an initial path that goes through each bag in turn. 
-	  originalRoute = Alloc_RouteDefinition(); 
-	  for (i = 0; i < nTotalCities; i++)
-	    originalRoute->path[i] = (unsigned char) i;
-	  
-	  #ifdef GRAPHICS
-	    // Show the original route
-	    PlotRoute((char *)originalRoute->path); 
-	    #endif
-	    
-	    originalRoute->length = 0.0;
-	    originalRoute->nCitiesVisited = 1;
-	    
-	    sw_init();
-	    sw_start();
-	    // Find the best route
-	    res = ShortestRoute(originalRoute);
-	    
-	    sw_stop();
-	    sw_timeString(buf);
-	    
-	    printf("Route length is %lf it took %s\n", res->length, buf);
-	      
-	      #ifdef GRAPHICS
-	      // Show the best route
-	      PlotRoute((char *)res->path);
-	      
-	      free(res);
-	      sleep(2);
-	    gs_exit();
-	    #endif  
-	    
-	    return 0;
-	}
-	
+int main (int argc, char **argv) 
+{
+  RouteDefinition *originalRoute, *res;
+  int i;
+  char buf[256];
+  
+  ReadRoute();
+  
+  #ifdef GRAPHICS
+  gs_init(501,501);
+  #endif
+  
+  // Set up an initial path that goes through each bag in turn. 
+  originalRoute = Alloc_RouteDefinition(); 
+  for (i = 0; i < nTotalCities; i++)
+    originalRoute->path[i] = (unsigned char) i;
+  
+  #ifdef GRAPHICS
+    // Show the original route
+    PlotRoute((char *)originalRoute->path); 
+    #endif
+    
+    originalRoute->length = 0.0;
+    originalRoute->nCitiesVisited = 1;
+    
+    sw_init();
+    sw_start();
+    // Find the best route
+    res = ShortestRoute(originalRoute);
+    
+    sw_stop();
+    sw_timeString(buf);
+    
+    printf("Route length is %lf it took %s\n", res->length, buf);
+      
+      #ifdef GRAPHICS
+      // Show the best route
+      PlotRoute((char *)res->path);
+      
+      free(res);
+      sleep(2);
+    gs_exit();
+    #endif  
+    
+    return 0;
+    
+}
