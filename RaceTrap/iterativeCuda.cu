@@ -42,7 +42,7 @@ double **distanceTable;         // Table of distances between any two grain-bags
 double   maxRouteLen = 10E100;  // Initial best distance, must be longer than any possible route
 double   globalBest  = 10E100;  // Bounding variable
 
-int fanOutLevel = 2;
+int fanOutLevel = 4;
 int elemSize = 0;
 int arraySize = 0;
 
@@ -86,58 +86,109 @@ void PlotRoute(char *path)
 #endif
 
 
+int faculty(int n)
+{
+  int result = 1;
+  for(; n > 0; n--)
+    result *= n;
+  return result;
+}
+
 int nodesAtLevel(int level)
 {
-  level = level - 1;
-  int result = 1;
-  for (int i = 1; i <= level; i++){
-    result = result * (nTotalCities - i);
+  
+//   for (int x = 1; x < 10; x++){
+//     printf("%d! = %d\n", x, faculty(x));
+//   }
+  //printf("nCities: %d, level:%d\n", nTotalCities, level);
+  //return faculty(nTotalCities - level) / faculty(level) - (nTotalCities - level);
+  
+  
+//   //level = level - 1;
+//   if (level == 1)
+//     return level;
+//   
+  int result = 1;//nTotalCities;
+  int tmp = 1;   
+  for (int i = 1; i < level; i++){
+    
+    result += (nTotalCities - i)*(tmp);
+    tmp = (nTotalCities - i)*(tmp);
+    
+    //printf("it: %d res: %d, tmp: %d\n", i, result, tmp);
   }
-  return result;
+//   
+  return tmp;
+}
+
+
+void print_route(RouteDefinition *route)
+{
+    printf("Route - nVisited: %d, nLen: %f, route: ", route->nCitiesVisited, route->length);
+    for (int c = 0; c < nTotalCities; c++){
+       printf("%d", route->path[c]);
+    }
+    printf("\n");
+
 }
 
 char* stackToArray(stack_t *stck)
 {
   printf("Entering Flatten Stack\n");
   
-  elemSize = sizeof(RouteDefinition) + nTotalCities * sizeof(unsigned char);
-  int rest = elemSize % 4;
+  RouteDefinition *def = NULL;
+  
+  elemSize = sizeof(RouteDefinition) + nTotalCities * sizeof(def->path[0]);
+  
+  int rest = elemSize % 8;
+  
   int padding = 0; 
   
   if (rest > 0){
-    padding = 4 - rest;
+    padding = 8 - rest;
   }
   
-  arraySize = (elemSize+padding) * nodesAtLevel(fanOutLevel);
+  elemSize = elemSize + padding;
+  
+  arraySize = elemSize * nodesAtLevel(fanOutLevel);
   
   printf("Struct size is: %d, rest: %d, padding: %d, array: %d\n", elemSize, rest, padding, arraySize);
 
   char *tmp_route, *array, *iter;
   
-  array = (char*)malloc(sizeof(unsigned char) * arraySize);
+  array = (char*)malloc(arraySize);
     
-  iter = array;
   
   RouteDefinition *route;
   
-  while(stck->size > 0){                
+  //while(stck->size > 0){
+    
+  for (int p = 0; p < arraySize; p += elemSize) {
     
     tmp_route = (char*)pop_back(stck);
     
-    route = (RouteDefinition*)tmp_route;
+    printf("TEST TEST TEST \n");
+    
+    route = (RouteDefinition*)(tmp_route);
+    
+    print_route(route);
+    
+    
     printf("Len before copy: %f\n", route->length);
     
-    memcpy(iter, tmp_route, elemSize);
-        
-    iter += (elemSize + padding);
+    memcpy(array + p, tmp_route, elemSize - padding);
+    
+    route = (RouteDefinition*)(array + p);
+    
+    print_route(route);
+    
+    
+    //iter += elemSize;
     
     free(tmp_route);
   }
   
-  elemSize = elemSize + padding;
-  
   return array;
-
 }
 
 __global__ void cudaSolve(char* array, int numRoutes, int routeSize, int numCities)
@@ -153,21 +204,14 @@ __global__ void cudaSolve(char* array, int numRoutes, int routeSize, int numCiti
     
     RouteDefinition *route = (RouteDefinition*)array;
     
-    printf("Route: %d, len: %f - routeSize: %d nCiT: %d nR: %d\n", i, route->length, routeSize, numCities, numRoutes);
-    /*
-    printf("t:%s\n", route->path);
-    for (int c = 0; c < numCities; c++){
-      printf("id:%d, n:%d c:%d\n", i, c, route->path[c]);
-    }*/
-    
-    // TODO Do Some magic
-
-    
+    printf("Route: %d, visited: %d len: %f - routeSize: %d nCiT: %d nR: %d\n", i, route->nCitiesVisited, route->length, i*routeSize, numCities, numRoutes);
+            
     // Copy result back to position
     memcpy(array, route, routeSize);
     
     //printf("\n");
   }
+  
 }
 
 /* 
@@ -188,15 +232,15 @@ __global__ void cudaSolve(char* array, int numRoutes, int routeSize, int numCiti
  */ 
 RouteDefinition *ShortestRoute(RouteDefinition *route)
 { 
-  printf("Size of route def: %d\n", sizeof(RouteDefinition));
   
-  bestRoute = Alloc_RouteDefinition(); 
+  //bestRoute = Alloc_RouteDefinition(); 
   
-  bestRoute->length = 1.0;//maxRouteLen;
+  //bestRoute->length = 1.0;//maxRouteLen;
   
   int nodesAtThisLevel = nodesAtLevel(fanOutLevel); 
   //(nTotalCities - 1) * (nTotalCities - 2);
-  printf("Nodes at this level: %d \n", nodesAtThisLevel);
+  
+  printf("FanOut: %d: node@Level: %d \n", fanOutLevel, nodesAtThisLevel);
   
   //stack_t* stck;
   //stck = stack_create();
@@ -231,18 +275,18 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	
 	// LEVEL 3 in three structure
 	
-	stack_t* stck;
-	stck = stack_create();
+  stack_t* stck;
+  stck = stack_create();
 	
 	// This is the CUDA part of the assignment 
 	//    for(int p = route->nCitiesVisited; p < nTotalCities; p++){
 	  //        
 	//        
 	//        
-	RouteDefinition *newRoute;
+  RouteDefinition *newRoute;
 	//        newRoute = Alloc_RouteDefinition();  
 	//        
-	double newLength;// = route->length + distanceTable[route->path[route->nCitiesVisited-1]][route->path[p]];
+  double newLength;// = route->length + distanceTable[route->path[route->nCitiesVisited-1]][route->path[p]];
 	//        
 	//        memcpy(newRoute->path, route->path, nTotalCities);   // Copy current route from route
 	//            
@@ -252,70 +296,74 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	//        newRoute->nCitiesVisited = route->nCitiesVisited + 1;
 	//        newRoute->length  = newLength;
 	//        
-	push(stck, route);
+  push(stck, route);
 	
-	RouteDefinition *curr_route;
-	curr_route = Alloc_RouteDefinition();
+  RouteDefinition *curr_route;
+  curr_route = Alloc_RouteDefinition();
 	
-	while(stck->size > 0){
-	  curr_route = (RouteDefinition *)pop_back(stck);
+  while(stck->size > 0){
+    curr_route = (RouteDefinition *)pop_back(stck);
 	  
-	  // Has visited all cities
+      // Has visited all cities
+      
+      if (curr_route->nCitiesVisited == fanOutLevel){
+	
+	// Push current popped node to stack
+	push(stck, curr_route);
+	
+	// convert stack to array
+	char *array = stackToArray(stck);
+	
+	free(stck);
+	
+	char *devArray;
+	
+	cudaMalloc((void**)&devArray, arraySize);
+	
+	cudaMemcpy((void*)devArray, (void*)array, arraySize, cudaMemcpyHostToDevice);
+	
+	printf("Arraysize before cuda: %d, nodes: %d\n", arraySize, nodesAtThisLevel);
+	
+	int threadsPerBlock = 512;
+	int blocksPerGrid = (nodesAtThisLevel + threadsPerBlock - 1) / threadsPerBlock;
+	
+	printf("Thread Per block: %d, blocksPerGrid: %d, nTotalCities: %d\n", threadsPerBlock, blocksPerGrid, nTotalCities);
+	
+	cudaSolve<<<blocksPerGrid, threadsPerBlock>>>(devArray, nodesAtThisLevel, elemSize, nTotalCities);
+	
+	cudaMemcpy((void*)array, (void*)devArray, arraySize, cudaMemcpyDeviceToHost);
+	
+	cudaFree(devArray);
+	
+	free(array);
+	
+	break;          
+      } 
+      
+      else {
+	for (int i = curr_route->nCitiesVisited; i < nTotalCities; i++){
 	  
-	  if (curr_route->nCitiesVisited == fanOutLevel){
-	    
-	    // Push current popped node to stack
-	    push(stck, curr_route);
-	    
-	    // convert stack to array
-	    char *array = stackToArray(stck);
-	    free(stck);
-	    
-	    char *devArray;
-	    
-	    cudaMalloc((void**)&devArray, arraySize);
-	    
-	    cudaMemcpy(devArray, array, arraySize, cudaMemcpyHostToDevice);
-	    
-	    
-	    int threadsPerBlock = 512;
-	    int blocksPerGrid = (nodesAtThisLevel + threadsPerBlock - 1) / threadsPerBlock;
-	    
-	    printf("Thread Per block: %d, blocksPerGrid: %d, nTotalCities: %d\n", threadsPerBlock, blocksPerGrid, nTotalCities);
-	    
-	    cudaSolve<<<blocksPerGrid, threadsPerBlock>>>(devArray, nodesAtThisLevel, elemSize, nTotalCities);
-	    
-	    cudaMemcpy(array, devArray, arraySize, cudaMemcpyDeviceToHost);
-	    
-	    cudaFree(devArray);
-	    
-	    break;          
-	  } 
+	  newLength = curr_route->length + distanceTable[curr_route->path[curr_route->nCitiesVisited-1]][curr_route->path[i]];
 	  
-	  else {
-	    for (int i = curr_route->nCitiesVisited; i < nTotalCities; i++){
-	      
-	      newLength = curr_route->length + distanceTable[curr_route->path[curr_route->nCitiesVisited-1]][curr_route->path[i]];
-	      
-	      newRoute = Alloc_RouteDefinition();  
-	      
-	      memcpy(newRoute->path, curr_route->path, nTotalCities);   // Copy current route from route
-	      
-	      // Swaps the position of bag # 'i' and bag # 'nCitiesVisited' from route
-	      newRoute->path[curr_route->nCitiesVisited] = curr_route->path[i];
-	      newRoute->path[i]              = curr_route->path[curr_route->nCitiesVisited]; 
-	      newRoute->nCitiesVisited = curr_route->nCitiesVisited + 1;
-	      newRoute->length  = newLength;
-	      	      
-	      push(stck, newRoute);
-	      
-	    }   
-	  } 
+	  newRoute = Alloc_RouteDefinition();  
+	  
+	  memcpy(newRoute->path, curr_route->path, nTotalCities);   // Copy current route from route
+	  
+	  // Swaps the position of bag # 'i' and bag # 'nCitiesVisited' from route
+	  newRoute->path[curr_route->nCitiesVisited] = curr_route->path[i];
+	  newRoute->path[i]              = curr_route->path[curr_route->nCitiesVisited]; 
+	  newRoute->nCitiesVisited = curr_route->nCitiesVisited + 1;
+	  newRoute->length  = newLength;
+		  
+	  push(stck, newRoute);
+	  
 	}   
-	
-	free(route);
-	
-	return bestRoute;
+      } 
+    }   
+
+    free(route);
+
+    return bestRoute;
 }
 	
 	// In the desert, the shortest route is a straight line :)
@@ -397,7 +445,7 @@ int main (int argc, char **argv)
     sw_stop();
     sw_timeString(buf);
     
-    printf("Route length is %lf it took %s\n", res->length, buf);
+    //printf("Route length is %lf it took %s\n", res->length, buf);
       
       #ifdef GRAPHICS
       // Show the best route

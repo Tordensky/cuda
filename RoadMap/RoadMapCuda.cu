@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <cuda.h>
 
-#define WIDTH 5000
-#define HEIGHT 5000
+#define WIDTH 500
+#define HEIGHT 500
 #define SIZE WIDTH*HEIGHT
 
 int zooms=10;
@@ -66,9 +66,9 @@ __global__ void cudaSolve(int *res, int width, int height, float x_min, float x_
 {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     
-    int n = (width*height);
+    int n = (width * height);
     
-    if (i < n){
+    if (i <= n){
       int x, y;
     
       // Calculate x and y from i
@@ -78,7 +78,7 @@ __global__ void cudaSolve(int *res, int width, int height, float x_min, float x_
       res[i] = solve((((x_max-x_min)/WIDTH)*x)+x_min, (((y_max-y_min)/HEIGHT)*y)+y_min) * 10 / 100; 
     }
     
-    __syncthreads();
+    //__syncthreads();
 }
 
 
@@ -106,7 +106,7 @@ void CreateMap() {        //Our 'main' function
 #ifdef GRAPHICS
     gs_plot(x, y, colortable[result[i]]); //Plot the coordinate to map
 #else
-    crc+=colortable[result[i]];
+    crc += colortable[result[i]];
 #endif
     }
 #ifdef GRAPHICS
@@ -158,7 +158,7 @@ RoadMap ()
     cudaMalloc((void**)&devResult, bytesize);
 
     // Calculate space and number of blocks
-    threadsPerBlock = 512;
+    threadsPerBlock = 256;
     blocksPerGrid = (SIZE + threadsPerBlock - 1) / threadsPerBlock;
   
     printf("Thread Per block: %d, blocksPerGrid: %d\n", threadsPerBlock, blocksPerGrid);

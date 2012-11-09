@@ -50,7 +50,7 @@ inline int solve(double x, double y)              //Simple Mandelbrot
     r=next_r; s=next_s;
     if(++itt==100)break;
   }
-  
+  //c5d1d97f
   return itt;
 }
   
