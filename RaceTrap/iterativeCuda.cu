@@ -43,7 +43,7 @@ float **distanceTable;         // Table of distances between any two grain-bags
 float   maxRouteLen = 10E100;  // Initial best distance, must be longer than any possible route
 float   globalBest  = 10E100;  // Bounding variable
 
-int fanOutLevel = 1;
+int fanOutLevel = 6;
 int elemSize = 0;
 int arraySize = 0;
 int dist_array_size = 0;
@@ -100,6 +100,7 @@ void PlotRoute(char *path)
 }
 #endif
 
+// Function for making the 2d array of distances into a linear array for the device
 float *flatten_dist_table()
 {
   dist_array_size  = sizeof(float) * (nTotalCities * nTotalCities); 
@@ -108,7 +109,6 @@ float *flatten_dist_table()
   float *iter = dist_array;
   for (int a = 0; a < nTotalCities; a++){
     for (int b = 0; b < nTotalCities; b++){
-      printf("num %d\n", a*nTotalCities+b);
       iter[a*nTotalCities+b] = distanceTable[a][b];
     }
   }
@@ -116,14 +116,7 @@ float *flatten_dist_table()
   return dist_array;  
 }
 
-int faculty(int n)
-{
-  int result = 1;
-  for(; n > 0; n--)
-    result *= n;
-  return result;
-}
-
+// calculates the number of nodes at a given level in the three
 int nodesAtLevel(int level)
 { 
   int result = 1;//nTotalCities;
@@ -137,17 +130,19 @@ int nodesAtLevel(int level)
   return tmp;
 }
 
-
+// Helper function for printing out a route
 void print_route(RouteDefinition *route)
 {
     printf("Route - nVisited: %d, nLen: %f, route: ", route->nCitiesVisited, route->length);
     for (int c = 0; c < nTotalCities; c++){
-       printf("%d", route->path[c]);
+       printf("%d-", route->path[c]);
     }
     printf("\n");
 
 }
 
+
+// Make a stack into an array for device
 char* stackToArray(stack_t *stck)
 {  
   RouteDefinition *def = NULL;
@@ -162,35 +157,27 @@ char* stackToArray(stack_t *stck)
   
   elemSize = elemSize + padding;
   arraySize = elemSize * nodesAtLevel(fanOutLevel);
-  
-  //printf("Struct size is: %d, rest: %d, padding: %d, array: %d\n", elemSize, rest, padding, arraySize);
 
   char *tmp_route, *array;//, *iter;
   array = (char*)malloc(arraySize);
    
-  //RouteDefinition *route;
-   
   for (int p = 0; p < arraySize; p += elemSize) {
     tmp_route = (char*)pop_back(stck); 
-    //route = (RouteDefinition*)(tmp_route);
-    //print_route(route);
- 
-    //printf("Len before copy: %f\n", route->length);
     
     memcpy(array + p, tmp_route, elemSize - padding);
-    //route = (RouteDefinition*)(array + p);
-    
-    //print_route(route);    
+
     free(tmp_route);
   }
   return array;
 }
 
+// Helper function for calculatint dist between cities
 __device__ float calcDist(float *distTable, int a, int b, int nTotCities)
 {
   return distTable[a*nTotCities+b];
 }
 
+// fincds the best route in its subtree
 __device__ RouteDefinition* findBestRoute(RouteDefinition *route, float *devDistArray, int nTotCities, int routeSize)
 {
   stack_t* stck = device_stack_create();
@@ -214,14 +201,9 @@ __device__ RouteDefinition* findBestRoute(RouteDefinition *route, float *devDist
     
     curr_route = (RouteDefinition*)device_pop(stck);
     
-    //printf("ROUND_TRIP %d, nv: %d, cl: %f\n", stck->size, curr_route->nCitiesVisited, curr_route->length);
-    
     if (curr_route->nCitiesVisited == nTotCities){
-      //printf("visited all cites\n");
       
       curr_route->length += calcDist(devDistArray, curr_route->path[curr_route->nCitiesVisited-1], curr_route->path[0], nTotCities);
-      
-      printf("LENGHT IS: %f\n", curr_route->length);
       
       if (curr_route->length < bestRoute->length){
 	free(bestRoute);
@@ -249,7 +231,6 @@ __device__ RouteDefinition* findBestRoute(RouteDefinition *route, float *devDist
 		    
 	device_push(stck, newRoute);
 	
-	// TODO free memory
       }
       free(curr_route);
     }
@@ -273,8 +254,6 @@ __global__ void cudaSolve(char* array, float *devDistArray, int numRoutes, int r
     
     RouteDefinition *route = (RouteDefinition*)array;
     
-    //printf("Route: %d, visited: %d len: %f - routeSize: %d nCiT: %d nR: %d\n", i, route->nCitiesVisited, route->length, i*routeSize, numCities, numRoutes);
-
     findBestRoute(route, devDistArray, numCities, routeSize);
   }
 }
@@ -291,22 +270,27 @@ RouteDefinition* findBestRouteInArray(char *array){
     
     tmp_route = (RouteDefinition*)(array + p);
     
-    print_route(tmp_route);
+    //print_route(tmp_route);
     
     if (tmp_route->length < bestRoute->length){
-      printf("NEW BEST\n");
+      //printf("NEW BEST\n");
       bestRoute = tmp_route;
 #ifdef GRAPHICS
       PlotRoute((char *)bestRoute->path);
-      sleep(1);
+      //sleep(1);
 #endif  
     } 
   }
   
-  // TODO FREE FREE FREE
-  printf("BEST ROUTE: ");
+  tmp_route = Alloc_RouteDefinition();
+  
+  memcpy(tmp_route, bestRoute, elemSize);
+  
+  printf("BEST ROUTE: \n\t");
+  
   print_route(bestRoute);
-  return bestRoute; 
+  
+  return tmp_route; 
 }
 /* 
  * A recursive Traveling Salesman Solver using branch-and-bound. 
@@ -327,36 +311,15 @@ RouteDefinition* findBestRouteInArray(char *array){
 RouteDefinition *ShortestRoute(RouteDefinition *route)
 { 
   RouteDefinition *bestRoute;
-  //bestRoute = Alloc_RouteDefinition(); 
-  
-  //bestRoute->length = 1.0;//maxRouteLen;
   
   int nodesAtThisLevel = nodesAtLevel(fanOutLevel); 
-  //(nTotalCities - 1) * (nTotalCities - 2);
-  
-  //printf("FanOut: %d: node@Level: %d \n", fanOutLevel, nodesAtThisLevel);
-  	
+
   stack_t* stck;
   stck = stack_create();
-	
-	// This is the CUDA part of the assignment 
-	//    for(int p = route->nCitiesVisited; p < nTotalCities; p++){
-	  //        
-	//        
-	//        
+	     
   RouteDefinition *newRoute;
-	//        newRoute = Alloc_RouteDefinition();  
-	//        
-  float newLength;// = route->length + distanceTable[route->path[route->nCitiesVisited-1]][route->path[p]];
-	//        
-	//        memcpy(newRoute->path, route->path, nTotalCities);   // Copy current route from route
-	//            
-	//        // Swaps the position of bag # 'i' and bag # 'nCitiesVisited' from route
-	//        newRoute->path[route->nCitiesVisited] = route->path[p];
-	//        newRoute->path[p]              = route->path[route->nCitiesVisited]; 
-	//        newRoute->nCitiesVisited = route->nCitiesVisited + 1;
-	//        newRoute->length  = newLength;
-	//        
+      
+  float newLength;      
   push(stck, route);
 	
   RouteDefinition *curr_route;
@@ -364,8 +327,6 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	
   while(stck->size > 0){
     curr_route = (RouteDefinition *)pop_back(stck);
-	  
-      // Has visited all cities
       
       if (curr_route->nCitiesVisited == fanOutLevel){
 	
@@ -375,7 +336,7 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	// convert stack to array
 	char *array = stackToArray(stck);
 	
-	free(stck);
+	stack_destroy(stck);
 	
 	char *devArray;
 	
@@ -408,7 +369,7 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	cudaFree(devArray);
 	
 	free(distArray);
-	//free(array);
+	free(array);
 	
 	break;          
       } 
@@ -434,7 +395,7 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
       } 
     }   
 
-    //free(route);
+    free(route);
 
     return bestRoute;
 }
