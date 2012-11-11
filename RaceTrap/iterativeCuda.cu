@@ -26,7 +26,7 @@ typedef struct {
 } Coord; 
 
 typedef struct {
-  double        length;     // Length of the current path (distance)
+  float        length;     // Length of the current path (distance)
   unsigned char nCitiesVisited;    // Number of bags currently placed
   unsigned char path[0];    // Array of vertex/bag numbers in the path (see comment in
   // Alloc_RouteDefinition())
@@ -38,9 +38,9 @@ RouteDefinition *bestRoute;
 
 int      nTotalCities = 0;             // Number of grain-bagsg
 Coord   *cityCoords;             // Coordinates for the grain-bags
-double **distanceTable;         // Table of distances between any two grain-bags
-double   maxRouteLen = 10E100;  // Initial best distance, must be longer than any possible route
-double   globalBest  = 10E100;  // Bounding variable
+float **distanceTable;         // Table of distances between any two grain-bags
+float   maxRouteLen = 10E100;  // Initial best distance, must be longer than any possible route
+float   globalBest  = 10E100;  // Bounding variable
 
 int fanOutLevel = 4;
 int elemSize = 0;
@@ -140,12 +140,12 @@ char* stackToArray(stack_t *stck)
   
   elemSize = sizeof(RouteDefinition) + nTotalCities * sizeof(def->path[0]);
   
-  int rest = elemSize % 8;
+  int rest = elemSize % 4;
   
   int padding = 0; 
   
   if (rest > 0){
-    padding = 8 - rest;
+    padding = 4 - rest;
   }
   
   elemSize = elemSize + padding;
@@ -286,7 +286,7 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
   RouteDefinition *newRoute;
 	//        newRoute = Alloc_RouteDefinition();  
 	//        
-  double newLength;// = route->length + distanceTable[route->path[route->nCitiesVisited-1]][route->path[p]];
+  float newLength;// = route->length + distanceTable[route->path[route->nCitiesVisited-1]][route->path[p]];
 	//        
 	//        memcpy(newRoute->path, route->path, nTotalCities);   // Copy current route from route
 	//            
@@ -367,10 +367,10 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 }
 	
 	// In the desert, the shortest route is a straight line :)
-double EuclidDist(Coord *from, Coord *to)
+float EuclidDist(Coord *from, Coord *to)
   { 
-    double dx = fabs(from->x - to->x);
-    double dy = fabs(from->y - to->y);
+    float dx = fabs(from->x - to->x);
+    float dy = fabs(from->y - to->y);
     return sqrt(dx*dx + dy*dy);
   }
 	
@@ -401,9 +401,9 @@ static void ReadRoute()
     }
     
     // Allocate distance table 
-    distanceTable = (double**) malloc(nTotalCities * sizeof(double*));
+    distanceTable = (float**) malloc(nTotalCities * sizeof(float*));
     for (i = 0; i < nTotalCities; i++)
-      distanceTable[i] = (double*) malloc(nTotalCities * sizeof(double));
+      distanceTable[i] = (float*) malloc(nTotalCities * sizeof(float));
     
     // Compute the distances between each of the grain bags.
       for (i = 0; i < nTotalCities; i++)	  
