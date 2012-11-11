@@ -16,6 +16,7 @@
 #include "graphicsScreen.h"
 #include "StopWatch.h"
 #include "stack.c"
+#include "deviceStack.c"
 #include <pthread.h>
 #include <cuda.h>
 
@@ -42,9 +43,10 @@ float **distanceTable;         // Table of distances between any two grain-bags
 float   maxRouteLen = 10E100;  // Initial best distance, must be longer than any possible route
 float   globalBest  = 10E100;  // Bounding variable
 
-int fanOutLevel = 4;
+int fanOutLevel = 5;
 int elemSize = 0;
 int arraySize = 0;
+int dist_array_size = 0;
 
 
 inline RouteDefinition* Alloc_RouteDefinition()
@@ -58,6 +60,19 @@ inline RouteDefinition* Alloc_RouteDefinition()
   // to a path[nTotalCities] array.
   RouteDefinition *def = NULL;  
   return (RouteDefinition*) malloc(sizeof(RouteDefinition) + nTotalCities * sizeof(def->path[0]));
+}
+
+__device__ RouteDefinition* device_alloc_RouteDefinition(int nTotCities)
+{
+  if (nTotCities <= 0) 
+  {
+    printf("Error: Alloc_RouteDefinition called with invalid nTotalCities (%d)\n", nTotCities); 
+    //exit(-1); 
+  }
+  // NB: The +nTotalCities*sizeof.. trick "expands" the path[0] array in RouteDefintion
+  // to a path[nTotalCities] array.
+  RouteDefinition *def = NULL;  
+  return (RouteDefinition*) malloc(sizeof(RouteDefinition) + nTotCities * sizeof(def->path[0]));
 }
 
 
@@ -85,6 +100,22 @@ void PlotRoute(char *path)
 }
 #endif
 
+float *flatten_dist_table()
+{
+  dist_array_size  = sizeof(float) * (nTotalCities * nTotalCities); 
+  float* dist_array = (float*)malloc(dist_array_size);
+  
+  float *iter = dist_array;
+  for (int a = 0; a < nTotalCities; a++){
+    for (int b = 0; b < nTotalCities; b++){
+      iter[a*b] = distanceTable[a][b];
+      //iter++;
+      printf("float is: %f\n", iter[a*b]);
+    }
+  }
+    
+  return dist_array;  
+}
 
 int faculty(int n)
 {
@@ -191,7 +222,85 @@ char* stackToArray(stack_t *stck)
   return array;
 }
 
-__global__ void cudaSolve(char* array, int numRoutes, int routeSize, int numCities)
+__device__ float calcDist(float *distTable, int a, int b)
+{
+  return distTable[a*b];
+}
+
+__device__ RouteDefinition* findBestRoute(RouteDefinition *route, float *devDistArray, int nTotCities, int routeSize)
+{
+  printf("enters solve for best route\n");
+  
+  // TODO solve this shit once and for all
+  stack_t* stck = device_stack_create();
+  
+  RouteDefinition *bestRoute;
+  bestRoute = device_alloc_RouteDefinition(nTotCities);
+  bestRoute->length = 10E100;
+  
+  RouteDefinition *curr_route;
+  curr_route = device_alloc_RouteDefinition(nTotCities);
+  
+  RouteDefinition *newRoute;
+  
+  float newLength = 1234.5678;
+  
+  memcpy(curr_route, route, routeSize);
+  
+  device_push(stck, curr_route);
+  
+  while(stck->size > 0){
+    
+    curr_route = (RouteDefinition*)device_pop(stck);
+    
+    printf("ROUND_TRIP %d, nv: %d, cl: %f\n", stck->size, curr_route->nCitiesVisited, curr_route->length);
+    
+    if (curr_route->nCitiesVisited == nTotCities){
+      printf("visited all cites\n");
+      
+      curr_route->length += calcDist(devDistArray, curr_route->path[curr_route->nCitiesVisited-1], curr_route->path[0]);
+      
+      if (curr_route->length < bestRoute->length){
+	free(bestRoute);
+	bestRoute = curr_route;
+      } else {
+	free(curr_route);
+      }
+      
+    } else {
+      for (int i = curr_route->nCitiesVisited; i < nTotCities; i++){
+	// TODO calculate length
+	newLength = curr_route->length + calcDist(devDistArray, curr_route->path[curr_route->nCitiesVisited-1], curr_route->path[i]);
+	
+	if (newLength >= bestRoute->length){     
+	  continue;
+	}
+	
+	newRoute = device_alloc_RouteDefinition(nTotCities);
+	
+	memcpy(newRoute->path, curr_route->path, nTotCities);
+	
+	newRoute->path[curr_route->nCitiesVisited] = curr_route->path[i];
+	newRoute->path[i]              = curr_route->path[curr_route->nCitiesVisited]; 
+	newRoute->nCitiesVisited = curr_route->nCitiesVisited + 1;
+	newRoute->length  = newLength;
+		    
+	device_push(stck, newRoute);
+	
+	// TODO free memory
+      }   
+    }
+  }
+  
+  device_stack_destroy(stck);
+  
+  memcpy(route, bestRoute, routeSize);
+  
+  return route;
+}
+
+
+__global__ void cudaSolve(char* array, float *devDistArray, int numRoutes, int routeSize, int numCities)
 {
   //printf("Hello\n");
   
@@ -205,15 +314,44 @@ __global__ void cudaSolve(char* array, int numRoutes, int routeSize, int numCiti
     RouteDefinition *route = (RouteDefinition*)array;
     
     printf("Route: %d, visited: %d len: %f - routeSize: %d nCiT: %d nR: %d\n", i, route->nCitiesVisited, route->length, i*routeSize, numCities, numRoutes);
-            
+    
+    
+    findBestRoute(route, devDistArray, numCities, routeSize);
     // Copy result back to position
-    memcpy(array, route, routeSize);
+    //memcpy(array, route, routeSize);
     
     //printf("\n");
   }
-  
 }
 
+
+RouteDefinition* findBestRouteInArray(char *array){
+  
+  RouteDefinition *tmp_route, *bestRoute;
+
+  bestRoute = Alloc_RouteDefinition();
+  bestRoute->length = maxRouteLen;
+  
+  for (int p = 0; p < arraySize; p += elemSize) {
+    
+    tmp_route = (RouteDefinition*)(array + p);
+    
+    print_route(tmp_route);
+    
+    if (tmp_route->length < bestRoute->length){
+      printf("NEW BEST\n");
+      bestRoute = tmp_route;
+#ifdef GRAPHICS
+      PlotRoute((char *)bestRoute->path);
+      sleep(1);
+#endif  
+    } 
+  }
+  
+  // TODO FREE FREE FREE
+  print_route(bestRoute);
+  return bestRoute; 
+}
 /* 
  * A recursive Traveling Salesman Solver using branch-and-bound. 
  * 
@@ -322,6 +460,14 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	
 	cudaMemcpy((void*)devArray, (void*)array, arraySize, cudaMemcpyHostToDevice);
 	
+	float *distArray, *devDistArray;
+	
+	distArray = flatten_dist_table();
+	
+	cudaMalloc((void**)&devDistArray, dist_array_size);
+	
+	cudaMemcpy((void*)devDistArray, (void*)distArray, dist_array_size, cudaMemcpyHostToDevice);
+	
 	printf("Arraysize before cuda: %d, nodes: %d\n", arraySize, nodesAtThisLevel);
 	
 	int threadsPerBlock = 512;
@@ -329,9 +475,11 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	
 	printf("Thread Per block: %d, blocksPerGrid: %d, nTotalCities: %d\n", threadsPerBlock, blocksPerGrid, nTotalCities);
 	
-	cudaSolve<<<blocksPerGrid, threadsPerBlock>>>(devArray, nodesAtThisLevel, elemSize, nTotalCities);
+	cudaSolve<<<blocksPerGrid, threadsPerBlock>>>(devArray, devDistArray, nodesAtThisLevel, elemSize, nTotalCities);
 	
 	cudaMemcpy((void*)array, (void*)devArray, arraySize, cudaMemcpyDeviceToHost);
+	
+	bestRoute = findBestRouteInArray(array);
 	
 	cudaFree(devArray);
 	
@@ -373,8 +521,10 @@ float EuclidDist(Coord *from, Coord *to)
     float dy = fabs(from->y - to->y);
     return sqrt(dx*dx + dy*dy);
   }
-	
-	// Reads coordinates from a file and generates a distance-table
+
+
+  
+// Reads coordinates from a file and generates a distance-table
 static void ReadRoute()
   { 
     FILE *file = fopen("./route.dat", "r");
@@ -451,8 +601,9 @@ int main (int argc, char **argv)
       // Show the best route
       PlotRoute((char *)res->path);
       
-      free(res);
       sleep(2);
+      free(res);
+      
     gs_exit();
     #endif  
     
