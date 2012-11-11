@@ -39,7 +39,6 @@ __device__ static stacknode_t *deviceNewnode(void *item)
     if (node == NULL)
 	    device_fatal_error();
     node->next = NULL;
-    node->prev = NULL;
     node->item = item;
     return node;
 }
@@ -84,7 +83,6 @@ __device__ void device_push(stack_t *stack, void *item)
     }
     else {
 	    node->next = stack->head;
-	    stack->head->prev = node;
 	    stack->head = node;
     }
     stack->size++;
@@ -115,30 +113,20 @@ __device__ void *device_pop_back(stack_t * stack)
  */
 __device__ void *device_pop(stack_t *stack)
 {
-    //printf("enters devcie pop\n");
-    if (stack->head == NULL) {
-      printf("leaves devcie pop NULL\n");
-      return NULL;
+	if (stack->head == NULL) {
+		return NULL;
     }
     else {
-      void *item = stack->head->item;
-      
-      stacknode_t *tmp = stack->head;
-      
-      stack->head = stack->head->next;
-      
-      //stack->head->prev = NULL;
-      
-      //printf("kommer hit\n");
-      
-      if (stack->head == NULL) {
-	  stack->tail = NULL;
-      }
-      
-      free(tmp);
-      stack->size--;
-      printf("leaves devcie pop\n");
-      return item;
+        void *item = stack->head->item;
+	    stacknode_t *tmp = stack->head;
+	    stack->head = stack->head->next;
+	    if (stack->head == NULL) {
+	        stack->tail = NULL;
+	    }
+	    free(tmp);
+		stack->size--;
+	    return item;
+	
     }
     
 	

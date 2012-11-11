@@ -35,7 +35,7 @@ typedef struct {
 
 
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
-RouteDefinition *bestRoute;
+
 
 int      nTotalCities = 0;             // Number of grain-bagsg
 Coord   *cityCoords;             // Coordinates for the grain-bags
@@ -43,7 +43,7 @@ float **distanceTable;         // Table of distances between any two grain-bags
 float   maxRouteLen = 10E100;  // Initial best distance, must be longer than any possible route
 float   globalBest  = 10E100;  // Bounding variable
 
-int fanOutLevel = 5;
+int fanOutLevel = 1;
 int elemSize = 0;
 int arraySize = 0;
 int dist_array_size = 0;
@@ -108,9 +108,8 @@ float *flatten_dist_table()
   float *iter = dist_array;
   for (int a = 0; a < nTotalCities; a++){
     for (int b = 0; b < nTotalCities; b++){
-      iter[a*b] = distanceTable[a][b];
-      //iter++;
-      printf("float is: %f\n", iter[a*b]);
+      printf("num %d\n", a*nTotalCities+b);
+      iter[a*nTotalCities+b] = distanceTable[a][b];
     }
   }
     
@@ -126,29 +125,15 @@ int faculty(int n)
 }
 
 int nodesAtLevel(int level)
-{
-  
-//   for (int x = 1; x < 10; x++){
-//     printf("%d! = %d\n", x, faculty(x));
-//   }
-  //printf("nCities: %d, level:%d\n", nTotalCities, level);
-  //return faculty(nTotalCities - level) / faculty(level) - (nTotalCities - level);
-  
-  
-//   //level = level - 1;
-//   if (level == 1)
-//     return level;
-//   
+{ 
   int result = 1;//nTotalCities;
   int tmp = 1;   
   for (int i = 1; i < level; i++){
     
     result += (nTotalCities - i)*(tmp);
     tmp = (nTotalCities - i)*(tmp);
-    
-    //printf("it: %d res: %d, tmp: %d\n", i, result, tmp);
-  }
-//   
+
+  }  
   return tmp;
 }
 
@@ -164,15 +149,11 @@ void print_route(RouteDefinition *route)
 }
 
 char* stackToArray(stack_t *stck)
-{
-  printf("Entering Flatten Stack\n");
-  
+{  
   RouteDefinition *def = NULL;
-  
   elemSize = sizeof(RouteDefinition) + nTotalCities * sizeof(def->path[0]);
   
   int rest = elemSize % 4;
-  
   int padding = 0; 
   
   if (rest > 0){
@@ -180,58 +161,38 @@ char* stackToArray(stack_t *stck)
   }
   
   elemSize = elemSize + padding;
-  
   arraySize = elemSize * nodesAtLevel(fanOutLevel);
   
-  printf("Struct size is: %d, rest: %d, padding: %d, array: %d\n", elemSize, rest, padding, arraySize);
+  //printf("Struct size is: %d, rest: %d, padding: %d, array: %d\n", elemSize, rest, padding, arraySize);
 
-  char *tmp_route, *array, *iter;
-  
+  char *tmp_route, *array;//, *iter;
   array = (char*)malloc(arraySize);
-    
-  
-  RouteDefinition *route;
-  
-  //while(stck->size > 0){
-    
+   
+  //RouteDefinition *route;
+   
   for (int p = 0; p < arraySize; p += elemSize) {
-    
-    tmp_route = (char*)pop_back(stck);
-    
-    printf("TEST TEST TEST \n");
-    
-    route = (RouteDefinition*)(tmp_route);
-    
-    print_route(route);
-    
-    
-    printf("Len before copy: %f\n", route->length);
+    tmp_route = (char*)pop_back(stck); 
+    //route = (RouteDefinition*)(tmp_route);
+    //print_route(route);
+ 
+    //printf("Len before copy: %f\n", route->length);
     
     memcpy(array + p, tmp_route, elemSize - padding);
+    //route = (RouteDefinition*)(array + p);
     
-    route = (RouteDefinition*)(array + p);
-    
-    print_route(route);
-    
-    
-    //iter += elemSize;
-    
+    //print_route(route);    
     free(tmp_route);
   }
-  
   return array;
 }
 
-__device__ float calcDist(float *distTable, int a, int b)
+__device__ float calcDist(float *distTable, int a, int b, int nTotCities)
 {
-  return distTable[a*b];
+  return distTable[a*nTotCities+b];
 }
 
 __device__ RouteDefinition* findBestRoute(RouteDefinition *route, float *devDistArray, int nTotCities, int routeSize)
 {
-  printf("enters solve for best route\n");
-  
-  // TODO solve this shit once and for all
   stack_t* stck = device_stack_create();
   
   RouteDefinition *bestRoute;
@@ -243,7 +204,7 @@ __device__ RouteDefinition* findBestRoute(RouteDefinition *route, float *devDist
   
   RouteDefinition *newRoute;
   
-  float newLength = 1234.5678;
+  float newLength;
   
   memcpy(curr_route, route, routeSize);
   
@@ -253,12 +214,14 @@ __device__ RouteDefinition* findBestRoute(RouteDefinition *route, float *devDist
     
     curr_route = (RouteDefinition*)device_pop(stck);
     
-    printf("ROUND_TRIP %d, nv: %d, cl: %f\n", stck->size, curr_route->nCitiesVisited, curr_route->length);
+    //printf("ROUND_TRIP %d, nv: %d, cl: %f\n", stck->size, curr_route->nCitiesVisited, curr_route->length);
     
     if (curr_route->nCitiesVisited == nTotCities){
-      printf("visited all cites\n");
+      //printf("visited all cites\n");
       
-      curr_route->length += calcDist(devDistArray, curr_route->path[curr_route->nCitiesVisited-1], curr_route->path[0]);
+      curr_route->length += calcDist(devDistArray, curr_route->path[curr_route->nCitiesVisited-1], curr_route->path[0], nTotCities);
+      
+      printf("LENGHT IS: %f\n", curr_route->length);
       
       if (curr_route->length < bestRoute->length){
 	free(bestRoute);
@@ -269,8 +232,7 @@ __device__ RouteDefinition* findBestRoute(RouteDefinition *route, float *devDist
       
     } else {
       for (int i = curr_route->nCitiesVisited; i < nTotCities; i++){
-	// TODO calculate length
-	newLength = curr_route->length + calcDist(devDistArray, curr_route->path[curr_route->nCitiesVisited-1], curr_route->path[i]);
+	newLength = curr_route->length + calcDist(devDistArray, curr_route->path[curr_route->nCitiesVisited-1], curr_route->path[i], nTotCities);
 	
 	if (newLength >= bestRoute->length){     
 	  continue;
@@ -288,8 +250,10 @@ __device__ RouteDefinition* findBestRoute(RouteDefinition *route, float *devDist
 	device_push(stck, newRoute);
 	
 	// TODO free memory
-      }   
+      }
+      free(curr_route);
     }
+    
   }
   
   device_stack_destroy(stck);
@@ -302,25 +266,16 @@ __device__ RouteDefinition* findBestRoute(RouteDefinition *route, float *devDist
 
 __global__ void cudaSolve(char* array, float *devDistArray, int numRoutes, int routeSize, int numCities)
 {
-  //printf("Hello\n");
-  
   int i = blockDim.x * blockIdx.x + threadIdx.x;
   
-  
   if (i < numRoutes){
-    // Move pointer to correct Route
     array = array + (i * routeSize);
     
     RouteDefinition *route = (RouteDefinition*)array;
     
-    printf("Route: %d, visited: %d len: %f - routeSize: %d nCiT: %d nR: %d\n", i, route->nCitiesVisited, route->length, i*routeSize, numCities, numRoutes);
-    
-    
+    //printf("Route: %d, visited: %d len: %f - routeSize: %d nCiT: %d nR: %d\n", i, route->nCitiesVisited, route->length, i*routeSize, numCities, numRoutes);
+
     findBestRoute(route, devDistArray, numCities, routeSize);
-    // Copy result back to position
-    //memcpy(array, route, routeSize);
-    
-    //printf("\n");
   }
 }
 
@@ -349,6 +304,7 @@ RouteDefinition* findBestRouteInArray(char *array){
   }
   
   // TODO FREE FREE FREE
+  printf("BEST ROUTE: ");
   print_route(bestRoute);
   return bestRoute; 
 }
@@ -370,7 +326,7 @@ RouteDefinition* findBestRouteInArray(char *array){
  */ 
 RouteDefinition *ShortestRoute(RouteDefinition *route)
 { 
-  
+  RouteDefinition *bestRoute;
   //bestRoute = Alloc_RouteDefinition(); 
   
   //bestRoute->length = 1.0;//maxRouteLen;
@@ -378,41 +334,8 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
   int nodesAtThisLevel = nodesAtLevel(fanOutLevel); 
   //(nTotalCities - 1) * (nTotalCities - 2);
   
-  printf("FanOut: %d: node@Level: %d \n", fanOutLevel, nodesAtThisLevel);
-  
-  //stack_t* stck;
-  //stck = stack_create();
-  
-   
-    //    // allocate an array of all routes at level one
-    //    RouteDefinition *routes = (RouteDefinition*)malloc(sizeof(RouteDefinition) * nodesAtThisLevel);
-    //    
-    //        // Generate an array holding all routes at level two
-    
-    //	for(int p = route->nVisited; p < nTotalCities; p++){
-      //		// Calculate route length
-      //		double newLength = route->length + distanceTable[route->path[route->nCitiesVisited-1]][route->path[p]];  	
-      //	
-      //		// Copy current route to new route
-      //		memcpy(routes[p-1].path, route->path, nTotalCities);			
-      //		
-      //	    // Swaps the position of bag # 'i' and bag # 'nCitiesVisited' from route
-      //	    routes[p-1].path[route->nCitiesVisited] = route->path[p];
-      //	    routes[p-1].path[p]              = route->path[route->nCitiesVisited]; 
-      //	    routes[p-1].nCitiesVisited = route->nCitiesVisited + 1;
-      //	    routes[p-1].length  = newLength;
-      //	    
-      //	    
-      //	    // Print current calculatet paths
-      //	    printf("Route: %d - path: ", (p-1));
-      //	    for (int c = 0; c < nTotalCities; c++){
-	//	    	printf("%d", routes[p-1].path[c]);
-	//	    }
-	//	    printf("\n");
-	//    }
-	
-	// LEVEL 3 in three structure
-	
+  //printf("FanOut: %d: node@Level: %d \n", fanOutLevel, nodesAtThisLevel);
+  	
   stack_t* stck;
   stck = stack_create();
 	
@@ -468,12 +391,12 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	
 	cudaMemcpy((void*)devDistArray, (void*)distArray, dist_array_size, cudaMemcpyHostToDevice);
 	
-	printf("Arraysize before cuda: %d, nodes: %d\n", arraySize, nodesAtThisLevel);
+	//printf("Arraysize before cuda: %d, nodes: %d\n", arraySize, nodesAtThisLevel);
 	
 	int threadsPerBlock = 512;
 	int blocksPerGrid = (nodesAtThisLevel + threadsPerBlock - 1) / threadsPerBlock;
 	
-	printf("Thread Per block: %d, blocksPerGrid: %d, nTotalCities: %d\n", threadsPerBlock, blocksPerGrid, nTotalCities);
+	//printf("Thread Per block: %d, blocksPerGrid: %d, nTotalCities: %d\n", threadsPerBlock, blocksPerGrid, nTotalCities);
 	
 	cudaSolve<<<blocksPerGrid, threadsPerBlock>>>(devArray, devDistArray, nodesAtThisLevel, elemSize, nTotalCities);
 	
@@ -481,9 +404,11 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	
 	bestRoute = findBestRouteInArray(array);
 	
+	cudaFree(devDistArray);
 	cudaFree(devArray);
 	
-	free(array);
+	free(distArray);
+	//free(array);
 	
 	break;          
       } 
@@ -509,7 +434,7 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
       } 
     }   
 
-    free(route);
+    //free(route);
 
     return bestRoute;
 }
@@ -595,14 +520,15 @@ int main (int argc, char **argv)
     sw_stop();
     sw_timeString(buf);
     
-    //printf("Route length is %lf it took %s\n", res->length, buf);
+    printf("Route length is %lf it took %s\n", res->length, buf);
       
-      #ifdef GRAPHICS
+    #ifdef GRAPHICS
       // Show the best route
-      PlotRoute((char *)res->path);
+    PlotRoute((char *)res->path);
       
-      sleep(2);
-      free(res);
+    sleep(5);
+      
+    free(res);
       
     gs_exit();
     #endif  
