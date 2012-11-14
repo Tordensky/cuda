@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <cuda.h>
 
-#define WIDTH 500
-#define HEIGHT 500
+#define WIDTH 6000
+#define HEIGHT 6000
 #define SIZE WIDTH*HEIGHT
 
 int zooms=10;
@@ -38,15 +38,15 @@ int colorcount=10;
 
 float box_x_min, box_x_max, box_y_min, box_y_max;
 
-__device__ inline float translate_x(int x) {       
-  return (((box_x_max-box_x_min)/WIDTH)*x)+box_x_min;
-}
+// __device__ float translate_x(int x) {       
+//   return (((box_x_max-box_x_min)/WIDTH)*x)+box_x_min;
+// }
+// 
+// __device__ float translate_y(int y) {
+//   return (((box_y_max-box_y_min)/HEIGHT)*y)+box_y_min;
+// }
 
-__device__ inline float translate_y(int y) {
-  return (((box_y_max-box_y_min)/HEIGHT)*y)+box_y_min;
-}
-
-__device__ inline int solve(float x, float y)              //Simple Mandelbrot
+__device__ int solve(float x, float y)              //Simple Mandelbrot
 {                                          //divergation test
   float r=0.0,s=0.0;
   float next_r,next_s;
@@ -68,17 +68,17 @@ __global__ void cudaSolve(int *res, int width, int height, float x_min, float x_
     
     int n = (width * height);
     
-    if (i <= n){
+    if (i < n){
       int x, y;
     
       // Calculate x and y from i
       x = int(i % width);
       y = int(i / width);
                   
-      res[i] = solve((((x_max-x_min)/WIDTH)*x)+x_min, (((y_max-y_min)/HEIGHT)*y)+y_min) * 10 / 100; 
+      res[i] = solve((((x_max - x_min) / WIDTH) * x) + x_min, (((y_max - y_min) / HEIGHT) * y) + y_min) * 10 / 100; 
     }
     
-    //__syncthreads();
+//     //__syncthreads();
 }
 
 
@@ -98,6 +98,7 @@ void CreateMap() {        //Our 'main' function
   
   x = 0;
   y = 0;
+
   for (int i = 0; i < SIZE; i++){
     x = int(i % WIDTH);
     y = int(i / WIDTH);
@@ -113,28 +114,6 @@ void CreateMap() {        //Our 'main' function
   gs_update();
 #endif
   
-   // TODO allocate and free before all and after all
-  
-  //result[0] = 123;
-//   printf("New round\n");
-//   for (int r = 0; r < SIZE; r++)
-//     if (result[r] > 10)
-//       printf("\tResult %d\n", result[r]);
-  
-//   for(y=0;y<HEIGHT;y++)              //Main loop for map generation
-//     for(x=0;x<WIDTH;x++){  
-//       color = solve(translate_x(x), translate_y(y))*colorcount/100;
-//       
-// #ifdef GRAPHICS
-//       gs_plot(x,y,colortable[color]); //Plot the coordinate to map
-// 
-// #else
-//       crc+=colortable[color];
-// #endif
-//     }
-// #ifdef GRAPHICS
-//   gs_update();
-// #endif
 }
 
 
@@ -142,10 +121,7 @@ int
 RoadMap ()
 {
     int i;
-    double deltaxmin, deltaymin, deltaxmax,deltaymax;
-
-    
-    
+    float deltaxmin, deltaymin, deltaxmax,deltaymax;    
   
     bytesize = SIZE * sizeof(int);
   
@@ -158,7 +134,7 @@ RoadMap ()
     cudaMalloc((void**)&devResult, bytesize);
 
     // Calculate space and number of blocks
-    threadsPerBlock = 256;
+    threadsPerBlock = 512;
     blocksPerGrid = (SIZE + threadsPerBlock - 1) / threadsPerBlock;
   
     printf("Thread Per block: %d, blocksPerGrid: %d\n", threadsPerBlock, blocksPerGrid);

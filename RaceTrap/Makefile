@@ -1,6 +1,7 @@
 CC = /opt/cuda/bin/nvcc 
 # Remove -DGRAPHICS to compile with no graphic support (e.g. for measurements)
-CFLAGS = -arch=sm_20 -DGRAPHICS 
+CFLAGS = -arch=sm_20 
+#-DGRAPHICS 
 #-O2
 RRDIR = ../lib
 

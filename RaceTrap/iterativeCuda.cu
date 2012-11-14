@@ -352,9 +352,9 @@ RouteDefinition *ShortestRoute(RouteDefinition *route)
 	
 	cudaMemcpy((void*)devDistArray, (void*)distArray, dist_array_size, cudaMemcpyHostToDevice);
 	
-	//printf("Arraysize before cuda: %d, nodes: %d\n", arraySize, nodesAtThisLevel);
+	printf("nodes: %d\n", nodesAtThisLevel);
 	
-	int threadsPerBlock = 512;
+	int threadsPerBlock = 128;
 	int blocksPerGrid = (nodesAtThisLevel + threadsPerBlock - 1) / threadsPerBlock;
 	
 	//printf("Thread Per block: %d, blocksPerGrid: %d, nTotalCities: %d\n", threadsPerBlock, blocksPerGrid, nTotalCities);

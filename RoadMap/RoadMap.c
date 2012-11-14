@@ -2,8 +2,8 @@
 #include "StopWatch.h"
 #include <stdio.h>
 
-#define WIDTH 500
-#define HEIGHT 500
+#define WIDTH 6000
+#define HEIGHT 6000
 #define SIZE WIDTH*HEIGHT
 
 int zooms=10;
